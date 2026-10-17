@@ -1,0 +1,14 @@
+{
+  "id": "asdk_app_rest_0001",
+  "connector_type": "rest",
+  "service": "example-rest",
+  "display_name": "Example REST",
+  "base_url": "https://api.example.com",
+  "openapi_url": "https://api.example.com/openapi.json",
+  "supported_auth": ["api_key"],
+  "api_key": { "location": "header", "name": "X-API-Key" },
+  "actions": [
+    { "id": "list", "name": "List items" },
+    { "id": "get", "name": "Get item" }
+  ]
+}

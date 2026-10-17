@@ -7,8 +7,20 @@ export const BASE_URL = "https://chatgpt.com";
 export const SEARCH_PATH = "/backend-anon/ps/plugins/search";
 export const HOME_PATH = "/backend-anon/ps/plugins/home";
 
+// Experimental, undocumented internal endpoints. Shape and access can change.
+export const PLUGIN_DETAIL_PATH = "/backend-api/ps/plugins";
+export const CONNECTOR_PATH = "/backend-api/aip/connectors";
+
 const CONFIG_DIR = join(homedir(), ".config", "chatgpt-plugins");
 const DEVICE_ID_FILE = join(CONFIG_DIR, "device-id");
+
+let transport = globalThis.fetch;
+
+// Tests inject a transport so no sockets are opened. Contract: (url, init) =>
+// Response-like { ok, status, headers.get(name), text() }.
+export function _setTransport(fn) {
+  transport = fn ?? globalThis.fetch;
+}
 
 // The web app always sends a per-device UUID. Without it Cloudflare answers 451.
 export function resolveDeviceId(explicit) {
@@ -30,17 +42,33 @@ export function resolveDeviceId(explicit) {
   return id;
 }
 
-export function buildHeaders({ deviceId, language = "en-US" } = {}) {
-  return {
-    "user-agent": `chatgpt-plugins-cli/0.1 (+node ${process.version})`,
+export function buildHeaders({ deviceId, language = "en-US", credentials = {} } = {}) {
+  const headers = {
+    "user-agent": `chatgpt-plugins-cli/0.2 (+node ${process.version})`,
     "oai-device-id": resolveDeviceId(deviceId),
     "oai-language": language,
     accept: "*/*",
   };
+  // A user may supply their OWN token/cookie to read their own connector data.
+  // We never scrape tokens from a browser session.
+  const token = credentials.token ?? process.env.CGP_ACCESS_TOKEN;
+  if (token) headers.authorization = `Bearer ${token}`;
+  if (credentials.cookie) headers.cookie = credentials.cookie;
+  return headers;
 }
 
 export function pluginUrl(plugin) {
   return `${BASE_URL}/plugins/${plugin.id}`;
+}
+
+export function pluginDetailUrl(pluginId, baseUrl = BASE_URL) {
+  return `${baseUrl}${PLUGIN_DETAIL_PATH}/${encodeURIComponent(pluginId)}`;
+}
+
+export function connectorUrl(appId, { baseUrl = BASE_URL, includeActions = false } = {}) {
+  const url = new URL(`${CONNECTOR_PATH}/${encodeURIComponent(appId)}`, baseUrl);
+  url.searchParams.set("include_actions", String(Boolean(includeActions)));
+  return url.toString();
 }
 
 export function searchUrl({ query = "google", scope = "GLOBAL", limit = 16, categoryId, pageToken, baseUrl = BASE_URL } = {}) {
@@ -53,28 +81,67 @@ export function searchUrl({ query = "google", scope = "GLOBAL", limit = 16, cate
   return url.toString();
 }
 
-async function requestJson(url, headers) {
+function statusHint(status) {
+  switch (status) {
+    case 451:
+      return "Cloudflare geo/bot block (send a valid oai-device-id, avoid datacenter IPs)";
+    case 401:
+      return "authentication required (supply your own token with --token / CGP_ACCESS_TOKEN)";
+    case 403:
+      return "access denied (connector metadata is auth-gated; use --connector-json with metadata you obtained yourself)";
+    case 404:
+      return "not found";
+    default:
+      return "";
+  }
+}
+
+// Thrown for any non-2xx so callers can decide whether to fall back.
+export class ApiError extends Error {
+  constructor({ status, url, body, hint }) {
+    const detail = extractDetail(body);
+    const suffix = detail ? ` — ${detail}` : "";
+    super(`HTTP ${status} from ${url}${suffix}`);
+    this.name = "ApiError";
+    this.status = status;
+    this.url = url;
+    this.body = body;
+    this.hint = hint ?? statusHint(status);
+    this.unauthorized = status === 401;
+  }
+}
+
+function extractDetail(body) {
+  if (!body || typeof body !== "object") return "";
+  if (typeof body.detail === "string") return body.detail;
+  if (body.detail && typeof body.detail.message === "string") return body.detail.message;
+  if (typeof body.message === "string") return body.message;
+  if (typeof body.error === "string") return body.error;
+  return "";
+}
+
+async function fetchBody(url, headers) {
   let res;
   try {
-    res = await fetch(url, { headers });
+    res = await transport(url, { headers });
   } catch (cause) {
     throw new Error(`Network error reaching ${url}: ${cause.message}`);
   }
-  if (!res.ok) {
-    let hint = "";
-    if (res.status === 451) {
-      hint = " (Cloudflare geo/bot block — try a different network/region)";
-    } else if (res.status === 403) {
-      hint = " (Cloudflare challenge — a valid oai-device-id and non-datacenter IP help)";
-    }
-    throw new Error(`HTTP ${res.status} from ${url}${hint}`);
+  const text = await res.text();
+  let body;
+  try {
+    body = text ? JSON.parse(text) : null;
+  } catch {
+    body = text;
   }
-  return res.json();
+  if (!res.ok) {
+    throw new ApiError({ status: res.status, url, body });
+  }
+  return body;
 }
 
-export async function search({ deviceId, language, baseUrl, ...opts } = {}) {
-  const url = searchUrl({ baseUrl, ...opts });
-  return requestJson(url, buildHeaders({ deviceId, language }));
+export async function search({ deviceId, language, credentials, baseUrl, ...opts } = {}) {
+  return fetchBody(searchUrl({ baseUrl, ...opts }), buildHeaders({ deviceId, language, credentials }));
 }
 
 export async function searchAll({ maxPages = 10, limit = 50, ...opts } = {}) {
@@ -90,6 +157,14 @@ export async function searchAll({ maxPages = 10, limit = 50, ...opts } = {}) {
   return { plugins, pages, truncated: Boolean(pageToken) };
 }
 
-export async function home({ deviceId, language, baseUrl = BASE_URL } = {}) {
-  return requestJson(new URL(HOME_PATH, baseUrl).toString(), buildHeaders({ deviceId, language }));
+export async function home({ deviceId, language, credentials, baseUrl = BASE_URL } = {}) {
+  return fetchBody(new URL(HOME_PATH, baseUrl).toString(), buildHeaders({ deviceId, language, credentials }));
+}
+
+export async function getPluginDetail(pluginId, { deviceId, language, credentials, baseUrl = BASE_URL } = {}) {
+  return fetchBody(pluginDetailUrl(pluginId, baseUrl), buildHeaders({ deviceId, language, credentials }));
+}
+
+export async function getConnector(appId, { deviceId, language, credentials, baseUrl, includeActions } = {}) {
+  return fetchBody(connectorUrl(appId, { baseUrl, includeActions }), buildHeaders({ deviceId, language, credentials }));
 }

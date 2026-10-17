@@ -1,0 +1,61 @@
+{
+  "id": "plugin_asdk_app_6a69834b831c8191a0281d6aca1722f0",
+  "name": "app-6a69834b831c8191a0281d6aca1722f0",
+  "created_at": "2026-07-29T04:36:27.637612Z",
+  "scope": "GLOBAL",
+  "workspace_id": null,
+  "creator_account_user_id": "user-wOG0hMAtdqrCip7fSi9R3hcC",
+  "canonical_app_id": "asdk_app_6a69834b831c8191a0281d6aca1722f0",
+  "is_template": false,
+  "connector_id": "asdk_app_6a69834b831c8191a0281d6aca1722f0",
+  "discoverability": "LISTED",
+  "status": "ENABLED",
+  "installation_policy": "AVAILABLE",
+  "disabled_reason": null,
+  "eligible_plan_types": null,
+  "installation_policy_source": null,
+  "authentication_policy": "ON_INSTALL",
+  "must_show_installation_interstitial": true,
+  "release": {
+    "id": "pluginrel_b558e9ad92fc81918de828a344fa4e58",
+    "version": "1.0.0",
+    "display_name": "alphaXiv",
+    "description": "alphaXiv helps users discover academic papers, read and query paper content, inspect linked GitHub repositories, and manage folders of saved papers through ChatGPT.",
+    "requires_local_executor": false,
+    "keywords": [],
+    "bundle_download_url": null,
+    "app_ids": ["asdk_app_6a69834b831c8191a0281d6aca1722f0"],
+    "app_manifest": {
+      "apps": {
+        "app-6a69834b831c8191a0281d6aca1722f0": {
+          "id": "asdk_app_6a69834b831c8191a0281d6aca1722f0",
+          "required": true
+        }
+      }
+    },
+    "interface": {
+      "short_description": "Research papers and library",
+      "long_description": "alphaXiv helps users discover academic papers, read and query paper content, inspect linked GitHub repositories, and manage folders of saved papers through ChatGPT.",
+      "developer_name": "alphaXiv",
+      "category": "Education & Research",
+      "plugin_category_id": "education & research",
+      "capabilities": [],
+      "website_url": "https://www.alphaxiv.org/",
+      "privacy_policy_url": "https://www.alphaxiv.org/privacy",
+      "terms_of_service_url": "https://www.alphaxiv.org/terms",
+      "brand_color": null,
+      "composer_icon_url": "https://files.openai.com/content?id=file_x&cdn=1",
+      "logo_url": "https://files.openai.com/content?id=file_y&cdn=1",
+      "screenshot_urls": []
+    },
+    "skills": [],
+    "onboarding_skill_name": null,
+    "app_templates": []
+  },
+  "is_deletable_workspace_plugin": false,
+  "creator_name": "alphaXiv",
+  "share_url": null,
+  "share_principals": [],
+  "can_share_to_workspace": false,
+  "can_publish_to_workspace": false
+}

@@ -1,0 +1,15 @@
+{
+  "id": "asdk_app_local_0003",
+  "connector_type": "mcp",
+  "service": "local-desktop",
+  "display_name": "Remote Desktop Commander",
+  "requires_local_executor": true,
+  "mcp": {
+    "transport": "stdio",
+    "endpoint": "mcp+stdio://remote-desktop"
+  },
+  "oauth": {
+    "authorization_url": "https://auth.local.example/authorize",
+    "token_url": "https://auth.local.example/token"
+  }
+}

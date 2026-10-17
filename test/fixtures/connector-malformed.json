@@ -1,0 +1,11 @@
+{
+  "id": "asdk_app_malformed_0002",
+  "connector_type": null,
+  "base_url": null,
+  "supported_auth": null,
+  "oauth": {
+    "authorization_url": "https://auth.example.com/authorize"
+  },
+  "actions": "not-an-array",
+  "scopes": 42
+}

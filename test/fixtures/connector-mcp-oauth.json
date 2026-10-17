@@ -1,0 +1,24 @@
+{
+  "id": "asdk_app_6a69834b831c8191a0281d6aca1722f0",
+  "connector_type": "mcp",
+  "service": "alphaxiv",
+  "display_name": "alphaXiv",
+  "base_url": "https://api.alphaxiv.org",
+  "description": "alphaXiv research paper tools over MCP.",
+  "supported_auth": ["oauth"],
+  "capabilities": ["read", "write"],
+  "mcp": {
+    "transport": "streamable_http",
+    "endpoint": "https://api.alphaxiv.org/mcp/v1"
+  },
+  "oauth": {
+    "authorization_url": "https://api.alphaxiv.org/oauth/authorize",
+    "token_url": "https://api.alphaxiv.org/oauth/token",
+    "registration_url": "https://api.alphaxiv.org/oauth/register",
+    "issuer": "https://api.alphaxiv.org",
+    "scopes": ["email", "profile"],
+    "pkce_required": true,
+    "pkce_method": "S256",
+    "token_endpoint_auth_methods_supported": ["none", "client_secret_post"]
+  }
+}

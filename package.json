@@ -1,9 +1,9 @@
 {
   "name": "chatgpt-plugins-cli",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
-  "description": "Unofficial CLI for ChatGPT's plugin search API (backend-anon/ps/plugins).",
+  "description": "Unofficial CLI for ChatGPT's plugin search API, plus an experimental plugin/connector inspector.",
   "bin": {
     "chatgpt-plugins": "./bin/chatgpt-plugins.js",
     "cgp": "./bin/chatgpt-plugins.js"

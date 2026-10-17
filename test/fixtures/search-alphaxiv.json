@@ -1,0 +1,30 @@
+{
+  "plugins": [
+    {
+      "id": "plugin_asdk_app_6a69834b831c8191a0281d6aca1722f0",
+      "name": "app-6a69834b831c8191a0281d6aca1722f0",
+      "canonical_app_id": "asdk_app_6a69834b831c8191a0281d6aca1722f0",
+      "connector_id": "asdk_app_6a69834b831c8191a0281d6aca1722f0",
+      "status": "ENABLED",
+      "release": {
+        "display_name": "alphaXiv",
+        "app_ids": ["asdk_app_6a69834b831c8191a0281d6aca1722f0"],
+        "app_manifest": {
+          "apps": {
+            "app-6a69834b831c8191a0281d6aca1722f0": {
+              "id": "asdk_app_6a69834b831c8191a0281d6aca1722f0",
+              "required": true
+            }
+          }
+        },
+        "interface": {
+          "short_description": "Research papers and library",
+          "developer_name": "alphaXiv",
+          "category": "Education & Research",
+          "plugin_category_id": "education & research"
+        }
+      }
+    }
+  ],
+  "pagination": { "limit": 16, "next_page_token": null }
+}
