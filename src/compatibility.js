@@ -1,5 +1,13 @@
 // Classifies connector metadata without ever claiming a live connection worked.
 // Metadata says what *should* be possible; it never proves a connection.
+//
+// The connector schema below was confirmed against the live endpoint
+// (GET /backend-api/aip/connectors/{app_id} with an authenticated bearer token):
+//   { connector_type: "MCP", service, base_url, supported_auth: [ { type: "OAUTH",
+//     authorization_url, token_url, registration_url, revocation_url,
+//     pkce_required, pkce_methods: ["S256"], default_scopes, scopes_supported,
+//     token_endpoint_auth_methods_supported, oidc_configuration_url, ... } ] }
+// Alternates are still accepted defensively because the schema is undocumented.
 
 export const ASSESSMENT_STATES = ["candidate", "requires_verification", "unsupported", "unknown"];
 
@@ -32,58 +40,53 @@ function strings(value) {
 export function normalizeConnector(raw) {
   if (raw == null || typeof raw !== "object") return null;
 
-  const service = lower(raw.service, raw.service_name, raw.provider, raw.name);
-  const name = firstString(raw.display_name, raw.name, raw.service, raw.provider, raw.id);
-  const baseUrl = firstString(raw.base_url, raw.baseUrl, raw.url, raw.endpoint, raw.server_url);
   const connectorTypeRaw = firstString(raw.connector_type, raw.type, raw.kind);
+  const connectorType = connectorTypeRaw ? connectorTypeRaw.toLowerCase() : null;
+  const baseUrl = firstString(raw.base_url, raw.baseUrl, raw.url, raw.endpoint, raw.server_url);
 
-  const mcp = normalizeMcp(raw);
-  const openapi = normalizeOpenApi(raw);
   const oauth = normalizeOAuth(raw);
   const apiKey = normalizeApiKey(raw);
+  const mcp = normalizeMcp(raw, { baseUrl, connectorType, oauth });
 
   const keywords = new Set(
-    strings([raw.keywords, raw.capabilities, raw.tags, raw.labels].flat()).map((k) => k.toLowerCase()),
+    strings([raw.keywords, raw.keywords_for_discovery, raw.capabilities, raw.tags, raw.labels && Object.keys(raw.labels)].flat()).map((k) => k.toLowerCase()),
   );
 
   return {
     id: firstString(raw.id, raw.connector_id, raw.app_id),
-    name,
-    service,
+    name: firstString(raw.display_name, raw.name, raw.service, raw.id),
+    service: firstString(raw.service, raw.service_name, raw.provider),
     connectorTypeRaw,
+    connectorType,
     baseUrl,
-    description: firstString(raw.description, raw.short_description),
+    description: firstString(raw.description, raw.model_description, raw.short_description),
     keywords: [...keywords],
     mcp,
-    openapi,
+    openapi: normalizeOpenApi(raw),
     oauth,
     apiKey,
     raw,
   };
 }
 
-function normalizeMcp(raw) {
+function normalizeMcp(raw, { baseUrl, connectorType, oauth }) {
   const mcp = raw.mcp ?? raw.mcp_config ?? {};
+  const explicit = firstString(mcp.endpoint, mcp.url, mcp.server_url, raw.mcp_endpoint, raw.mcp_url);
   const transport = lower(mcp.transport, raw.mcp_transport, raw.transport);
-  const endpoint = firstString(
-    mcp.endpoint,
-    mcp.url,
-    mcp.server_url,
-    raw.mcp_endpoint,
-    raw.mcp_url,
-    raw.server_url,
-    mcp.resource,
-  );
   const isMcp = Boolean(
-    transport?.includes("mcp") ||
-      firstString(raw.connector_type, raw.type)?.toLowerCase().includes("mcp") ||
-      endpoint,
+    connectorType?.includes("mcp") ||
+      transport?.includes("mcp") ||
+      explicit ||
+      (oauth.oauthResource && connectorType?.includes("mcp")),
   );
+  // For MCP connectors the connector's base_url is the MCP server endpoint.
+  const endpoint = explicit ?? (isMcp ? baseUrl : null);
   return {
     isMcp,
     endpoint: endpoint ?? null,
     transport: transport ?? null,
-    requiresLocalExecutor: Boolean(raw.requires_local_executor ?? raw.local_executor ?? false),
+    resource: firstString(oauth.oauthResource, mcp.resource) ?? null,
+    requiresLocalExecutor: Boolean(raw.requires_local_executor ?? raw.local_executor ?? raw.tunnel_id ?? false),
   };
 }
 
@@ -103,25 +106,37 @@ function normalizeOpenApi(raw) {
   return { isOpenApi, specUrl: specUrl ?? null, apiType: apiType ?? null, actionCount: actions.length, actions };
 }
 
+// supported_auth may be: [{type, authorization_url, ...}], ["oauth"], or "oauth".
+function authEntries(raw) {
+  const entries = [];
+  const pushObject = (value) => {
+    if (value && typeof value === "object" && !Array.isArray(value)) entries.push(value);
+  };
+  pushObject(raw.oauth);
+  pushObject(raw.oauth2);
+  pushObject(raw.authorization);
+  for (const entry of asArray(raw.supported_auth)) pushObject(entry);
+  return entries;
+}
+
+function supportedAuthTypes(raw) {
+  return asArray(raw.supported_auth)
+    .map((entry) => (typeof entry === "string" ? entry : entry?.type ?? entry?.name))
+    .filter(Boolean)
+    .map((s) => String(s).toLowerCase());
+}
+
+// Prefer the entry that actually carries OAuth endpoints.
+function pickOAuthEntry(raw) {
+  const entries = authEntries(raw);
+  return entries.find((e) => e.authorization_url || e.authorize_url || e.auth_url || e.token_url || e.registration_url) ?? entries[0] ?? {};
+}
+
 function normalizeOAuth(raw) {
-  const oauth = raw.oauth ?? raw.oauth2 ?? raw.authorization ?? raw.auth?.oauth ?? {};
-  const auth = raw.supported_auth ?? raw.auth?.supported_auth ?? raw.auth_types ?? raw.authentication;
+  const oauth = pickOAuthEntry(raw);
+  const supportedAuth = supportedAuthTypes(raw);
 
-  // supported_auth may be a string, "oauth" entry list, or objects.
-  let supportedAuth = [];
-  if (typeof auth === "string") supportedAuth = [auth];
-  else if (Array.isArray(auth)) {
-    supportedAuth = auth.map((entry) => (typeof entry === "string" ? entry : entry?.type ?? entry?.name)).filter(Boolean);
-  }
-  supportedAuth = supportedAuth.map((s) => String(s).toLowerCase());
-
-  const authorizationUrl = firstString(
-    oauth.authorization_url,
-    oauth.authorize_url,
-    oauth.auth_url,
-    raw.authorization_url,
-    raw.oauth_authorization_url,
-  );
+  const authorizationUrl = firstString(oauth.authorization_url, oauth.authorize_url, oauth.auth_url, raw.authorization_url, raw.oauth_authorization_url);
   const tokenUrl = firstString(oauth.token_url, oauth.access_token_url, raw.token_url, raw.oauth_token_url);
   const registrationUrl = firstString(
     oauth.registration_url,
@@ -130,12 +145,22 @@ function normalizeOAuth(raw) {
     raw.registration_url,
     raw.oauth_registration_url,
   );
-  const issuerUrl = firstString(oauth.issuer, oauth.issuer_url, oauth.discovery_url, raw.issuer, raw.oidc_discovery_url);
-  const scopes = normalizeScopes(oauth.scopes ?? oauth.scope ?? raw.scopes ?? raw.oauth_scopes);
+  const revocationUrl = firstString(oauth.revocation_url, oauth.revoke_url);
+  const issuerUrl = firstString(
+    oauth.oidc_configuration_url,
+    oauth.issuer,
+    oauth.issuer_url,
+    oauth.discovery_url,
+    oauth.authorization_server_base,
+    raw.oidc_discovery_url,
+  );
+  const scopes = normalizeScopes(oauth.default_scopes ?? oauth.scopes ?? oauth.scope ?? raw.scopes ?? raw.oauth_scopes);
+  const scopesSupported = normalizeScopes(oauth.scopes_supported ?? oauth.oidc_scopes_supported);
 
   const pkceRequired = Boolean(oauth.pkce_required ?? oauth.requires_pkce ?? raw.pkce_required ?? false);
-  const pkceMethod = firstString(oauth.pkce_method, oauth.code_challenge_method, raw.pkce_method);
-  const pkce = pkceRequired || Boolean(pkceMethod);
+  const pkceMethods = strings(oauth.pkce_methods);
+  const pkceMethod = firstString(oauth.pkce_method, oauth.code_challenge_method, raw.pkce_method, pkceMethods[0]);
+  const pkce = pkceRequired || pkceMethods.length > 0 || Boolean(pkceMethod);
 
   const clientAuthMethods = strings(
     oauth.token_endpoint_auth_methods_supported ??
@@ -149,7 +174,7 @@ function normalizeOAuth(raw) {
       tokenUrl ||
       registrationUrl ||
       supportedAuth.some((s) => s.includes("oauth")) ||
-      Object.keys(oauth).length > 0,
+      (typeof oauth === "object" && Object.keys(oauth).length > 0 && (pkce || scopes.length)),
   );
 
   return {
@@ -157,12 +182,17 @@ function normalizeOAuth(raw) {
     authorizationUrl: authorizationUrl ?? null,
     tokenUrl: tokenUrl ?? null,
     registrationUrl: registrationUrl ?? null,
+    revocationUrl: revocationUrl ?? null,
     issuerUrl: issuerUrl ?? null,
     scopes,
+    scopesSupported,
     pkce,
     pkceRequired,
-    pkceMethod: pkceMethod ?? (pkceRequired ? "S256" : null),
+    pkceMethod: pkceMethod ?? null,
+    pkceMethods,
     clientAuthMethods,
+    oidcEnabled: Boolean(oauth.oidc_enabled ?? issuerUrl),
+    oauthResource: firstString(oauth.resource),
     supportedAuth,
   };
 }
@@ -183,10 +213,10 @@ function normalizeScopes(scopes) {
 }
 
 function normalizeApiKey(raw) {
-  const key = raw.api_key ?? raw.auth?.api_key ?? {};
-  const supportedAuth = normalizeOAuth(raw).supportedAuth;
-  const isApiKey = Boolean(firstString(key.name, key.header, key.location) || supportedAuth.includes("api_key"));
-  return { isApiKey, location: firstString(key.location, key.in) ?? null, name: firstString(key.name, key.header) ?? null };
+  const entry = authEntries(raw).find((e) => String(e.type ?? "").toLowerCase().includes("api_key")) ?? raw.api_key ?? raw.auth?.api_key ?? {};
+  const supportedAuth = supportedAuthTypes(raw);
+  const isApiKey = Boolean(firstString(entry.name, entry.header, entry.location, entry.in) || supportedAuth.includes("api_key"));
+  return { isApiKey, location: firstString(entry.location, entry.in) ?? null, name: firstString(entry.name, entry.header) ?? null };
 }
 
 // ---------------------------------------------------------------------------
@@ -275,9 +305,10 @@ function assessAuthentication(connector) {
     if (oauth.tokenUrl) reasons.push(`token URL: ${oauth.tokenUrl}`);
     if (oauth.registrationUrl) reasons.push(`registration URL advertised: ${oauth.registrationUrl}`);
     else reasons.push("no registration URL advertised");
-    if (oauth.pkce) reasons.push(`PKCE: ${oauth.pkceMethod ?? "required"}`);
+    if (oauth.pkce) reasons.push(`PKCE: ${oauth.pkceMethod ?? oauth.pkceMethods.join(", ") ?? "required"}`);
     if (oauth.scopes.length) reasons.push(`scopes: ${oauth.scopes.join(", ")}`);
     if (oauth.clientAuthMethods.length) reasons.push(`client auth methods: ${oauth.clientAuthMethods.join(", ")}`);
+    if (oauth.issuerUrl) reasons.push(`OIDC/issuer: ${oauth.issuerUrl}`);
   } else if (apiKey.isApiKey) {
     type = "api_key";
     reasons.push("API key authentication advertised");
@@ -337,7 +368,6 @@ function deriveIndependentClient(metadata, authentication, protocol) {
     };
   }
 
-  // External protocol, no auth at all -> candidate (rare, but possible).
   if (authentication.type === "unknown") {
     return {
       state: "requires_verification",
@@ -348,7 +378,7 @@ function deriveIndependentClient(metadata, authentication, protocol) {
   if (authentication.type === "oauth") {
     const oauth = authentication.oauth ?? {};
     if (oauth.registrationUrl && oauth.authorizationUrl && oauth.tokenUrl) {
-      reasons.push("standard OAuth endpoints and a registration URL are advertised");
+      reasons.push("standard OAuth endpoints and a dynamic registration URL are advertised");
       reasons.push("an independent client could in principle register and connect, but this is unverified");
       return { state: "candidate", reasons };
     }

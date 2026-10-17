@@ -31,7 +31,7 @@ this is the most important thing to understand:
 | ----- | -------- | ------ | ------- |
 | 1. Search | `GET /backend-anon/ps/plugins/search?q=&scope=&limit=` | **Public** (needs `oai-device-id`) | plugin list + IDs |
 | 2. Plugin detail | `GET /backend-api/ps/plugins/{plugin_id}` | **Public** (verified) | plugin metadata, `canonical_app_id`, `release.app_manifest` |
-| 3. Connector detail | `GET /backend-api/aip/connectors/{app_id}?include_actions=false` | **Auth-gated** (401/403) | `connector_type`, `base_url`, `service`, `supported_auth`, OAuth URLs, scopes, PKCE, capabilities |
+| 3. Connector detail | `GET /backend-api/aip/connectors/{app_id}?include_actions=false` | **Needs a bearer token** (401 without) | `connector_type`, `base_url`, `service`, `supported_auth` (OAuth URLs, scopes, PKCE), capabilities |
 
 ### Layer 1 — Search
 
@@ -73,19 +73,80 @@ turn a plugin into its App ID(s).
 GET https://chatgpt.com/backend-api/ps/plugins/plugin_asdk_app_6a69834b831c8191a0281d6aca1722f0
 ```
 
-### Layer 3 — Connector detail (auth-gated, experimental)
+### Layer 3 — Connector detail (needs a bearer token, experimental)
 
-This holds the interesting part — `connector_type`, `base_url`, `service`, OAuth
-URLs, scopes, PKCE. **It is not anonymously accessible.** A request without a
-session token returns:
+This is the layer that matters — `connector_type`, `base_url`, `service`, and the
+full `supported_auth` block (OAuth URLs, PKCE, scopes). **It is not anonymous.**
+A request without a token returns:
 
 ```json
 {"detail":{"message":"Unauthorized - Access token is missing"}}
 ```
 
-The CLI **does not** scrape cookies, replay a logged-in session, or bypass the
-challenge. When the endpoint is gated it reports that plainly and falls back to
-**offline JSON inspection** (below).
+A **bearer access token** is required, and it works with nothing else:
+
+```bash
+TOKEN=...   # see "Getting a token" below
+curl -s 'https://chatgpt.com/backend-api/aip/connectors/asdk_app_...?include_actions=false' \
+  -H "authorization: Bearer $TOKEN" \
+  -H 'user-agent: Mozilla/5.0'
+```
+
+Two gotchas, both verified:
+
+- **Cloudflare 403s non-browser user-agents** on this path. The CLI therefore
+  sends a realistic `user-agent` by default (override with `CGP_USER_AGENT`).
+- Only the bearer matters here — `oai-device-id` and the `chatgpt-account-id`
+  header are **not** required for this endpoint.
+
+#### Real response shape (verified)
+
+```jsonc
+{
+  "id": "asdk_app_6a69834b831c8191a0281d6aca1722f0",
+  "connector_type": "MCP",
+  "service": "https://api.alphaxiv.org",
+  "base_url": "https://api.alphaxiv.org/mcp/v1",   // for MCP, this IS the endpoint
+  "developer_type": "TRUSTED_PARTNER",
+  "distribution_channel": "ECOSYSTEM_DIRECTORY",
+  "status": "ENABLED",
+  "labels": { "writes": "true" },
+  "actions": [],
+  "supported_auth": [
+    {
+      "type": "OAUTH",
+      "authorization_url": "https://api.alphaxiv.org/auth/oauth2/authorize",
+      "token_url": "https://api.alphaxiv.org/auth/oauth2/token",
+      "registration_url": "https://api.alphaxiv.org/auth/oauth2/register",
+      "revocation_url": "https://api.alphaxiv.org/auth/oauth2/revoke",
+      "pkce_required": true,
+      "pkce_methods": ["S256"],
+      "default_scopes": ["email", "profile"],
+      "scopes_supported": ["email", "profile"],
+      "token_endpoint_auth_methods_supported": ["none", "client_secret_basic", "client_secret_post"],
+      "oidc_configuration_url": "https://api.alphaxiv.org/auth/.well-known/openid-configuration",
+      "oidc_enabled": true,
+      "resource": "https://api.alphaxiv.org/mcp/v1"
+    }
+  ]
+}
+```
+
+The CLI normalizes several alternate spellings too (e.g. a top-level `oauth`
+object, `mcp.endpoint`, `authorize_url`) because the schema is undocumented.
+
+#### Getting a token
+
+The CLI never scrapes your browser. Supply **your own** token explicitly:
+
+- **Easiest:** open `https://chatgpt.com` while logged in, in DevTools console run
+  `copy((await (await fetch('/api/auth/session')).json()).accessToken)`, then
+  `export CGP_ACCESS_TOKEN=...` (or pass `--token`).
+- Or capture the `Bearer` from any `/backend-api/*` request in the Network tab.
+- Or use the offline fallback below.
+
+Without a token the endpoint is inaccessible; the CLI says so plainly and falls
+back to **offline JSON inspection**.
 
 ### Raw fetch (no CLI)
 
@@ -138,8 +199,10 @@ Assessment:
   appears plausible but has not been verified.
 ```
 
-Ran live (`cgp inspect alphaxiv`), layer 2 succeeds and layer 3 is gated, so the
-report says so and recommends `--connector-json`:
+Ran live with your own token, the CLI pulls real connector metadata and produces
+exactly the report above (`cgp inspect alphaxiv --token $CGP_ACCESS_TOKEN`).
+
+Without a token, layer 3 is inaccessible and the report says so:
 
 ```
 Connection
@@ -264,27 +327,31 @@ const assessment = assessCompatibility(normalizeConnector(connRaw), pluginRaw, {
 
 ## Limitations of metadata-based compatibility checks
 
-- **Layer 3 is auth-gated.** Live connector inspection generally returns 401/403.
-  Use `--connector-json`. Do not expect live connector data without a token you
-  own; even then the endpoint shape may change.
+- **Layer 3 needs a token.** Live connector inspection requires your own bearer
+  token; without it you get 401. The schema is undocumented and may change.
+- **Cloudflare is user-agent sensitive.** These paths 403 non-browser UAs, so the
+  CLI sends a browser-like `user-agent` (override with `CGP_USER_AGENT`).
 - **Only the first App ID is queried live.** Multi-app plugins report all App
   IDs, but the live connector fetch uses the first one (offline you control the file).
-- **Field names are inferred.** The internal connector schema is undocumented, so
-  normalization checks several common spellings (`oauth`/`oauth2`/`authorization`,
-  `authorization_url`/`authorize_url`/`auth_url`, …). Unknown shapes degrade to
-  `unknown` rather than guessing.
+- **Field names are mostly verified, not guaranteed.** The core shape above is
+  captured from the live endpoint, but normalization still accepts alternate
+  spellings defensively; unknown shapes degrade to `unknown` rather than guessing.
 - **No verification.** Classification is metadata-only; nothing here proves a
   live connection. A `candidate` is a hypothesis, not a result.
 
 ## Security considerations
 
 - **No credential scraping.** The tool never reads browser cookies, replays a
-  logged-in session, or circumvents a challenge.
+  logged-in session, or circumvents a challenge. A token is only ever what *you*
+  hand it.
 - **Credentials are opt-in and optional.** `--token`/`CGP_ACCESS_TOKEN` and
   `--cookie`/`CGP_COOKIE` are used only for your own requests, read only from
   flags or the environment, and never written to disk or logs.
 - **Offline mode is fully local.** `--plugin-json`/`--connector-json` make no
   network calls, so gated endpoints can be inspected without authentication.
+- **A token is a live credential for your account** — treat it like a password,
+  keep it out of git/history, and prefer the environment over `--token` on shared
+  machines. Tokens expire (the JWT carries `exp`).
 - The only thing persisted is a random device UUID at
   `~/.config/chatgpt-plugins/device-id` (mode `0600`).
 - `--connector-json` can contain OAuth secrets; treat exported files as sensitive.

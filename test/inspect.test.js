@@ -111,6 +111,22 @@ test("offline inspect reads plugin and connector JSON files", async () => {
   assert.equal(report.compatibility.independentClient.state, "candidate");
 });
 
+test("offline inspect parses the real captured connector schema", async () => {
+  const report = await inspect("plugin_asdk_app_6a69834b831c8191a0281d6aca1722f0", {
+    pluginJson: "test/fixtures/plugin-alphaxiv.json",
+    connectorJson: "test/fixtures/connector-alphaxiv-mcp.json",
+    offline: true,
+  });
+  assert.equal(report.connection.type, "mcp");
+  assert.equal(report.connection.endpoint, "https://api.alphaxiv.org/mcp/v1");
+  assert.equal(report.authentication.type, "oauth");
+  assert.equal(report.authentication.registrationUrl, "https://api.alphaxiv.org/auth/oauth2/register");
+  assert.deepEqual(report.authentication.scopes, ["email", "profile"]);
+  assert.equal(report.authentication.pkceMethod, "S256");
+  assert.equal(report.compatibility.independentClient.state, "candidate");
+  assert.equal(report.liveConnection.tested, false);
+});
+
 test("offline connector-only inspection still assesses compatibility", async () => {
   const report = await inspect(undefined, {
     connectorJson: "test/fixtures/connector-rest-apikey.json",

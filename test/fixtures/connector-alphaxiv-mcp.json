@@ -1,0 +1,123 @@
+{
+  "id": "asdk_app_6a69834b831c8191a0281d6aca1722f0",
+  "template_id": null,
+  "created_at": "2026-07-29T04:36:27.964918Z",
+  "updated_at": "2026-10-17T12:37:43.627236Z",
+  "connector_type": "MCP",
+  "name": "alphaXiv",
+  "description": "alphaXiv helps users discover academic papers, read and query paper content, inspect linked GitHub repositories, and manage folders of saved papers through ChatGPT.",
+  "model_description": "",
+  "service": "https://api.alphaxiv.org",
+  "base_url": "https://api.alphaxiv.org/mcp/v1",
+  "tunnel_id": null,
+  "supported_auth": [
+    {
+      "type": "OAUTH",
+      "authorization_url": "https://api.alphaxiv.org/auth/oauth2/authorize",
+      "token_url": "https://api.alphaxiv.org/auth/oauth2/token",
+      "registration_url": "https://api.alphaxiv.org/auth/oauth2/register",
+      "revocation_url": "https://api.alphaxiv.org/auth/oauth2/revoke",
+      "custom_redirect_url_params": null,
+      "custom_token_request_params": null,
+      "pkce_required": true,
+      "pkce_methods": [
+        "S256"
+      ],
+      "allow_http_redirect": true,
+      "supports_domain_restriction": true,
+      "supports_agentic_siwc": false,
+      "authorization_server_base": "https://api.alphaxiv.org/auth",
+      "base_scopes": [],
+      "default_scopes": [
+        "email",
+        "profile"
+      ],
+      "resource": "https://api.alphaxiv.org/mcp/v1",
+      "scopes_supported": [
+        "email",
+        "profile"
+      ],
+      "token_endpoint_auth_methods_supported": [
+        "none",
+        "client_secret_basic",
+        "client_secret_post"
+      ],
+      "oidc_configuration_url": "https://api.alphaxiv.org/auth/.well-known/openid-configuration",
+      "oidc_enabled": true,
+      "use_cimd": null,
+      "oidc_scopes_supported": [
+        "openid",
+        "profile",
+        "email",
+        "offline_access"
+      ],
+      "oidc_userinfo_endpoint": "https://api.alphaxiv.org/auth/oauth2/userinfo",
+      "authorization_response_iss_parameter_supported": null,
+      "client_id_metadata_document_supported": null
+    }
+  ],
+  "supports_oauth_owner_profile_id": true,
+  "owners": [
+    {
+      "type": "ORG",
+      "id": "org-EXAMPLE"
+    }
+  ],
+  "link_params_schema": null,
+  "link_params_overrides": null,
+  "labels": {
+    "writes": "true"
+  },
+  "status": "ENABLED",
+  "branding": {
+    "category": null,
+    "developer": "",
+    "website": "https://www.alphaxiv.org/",
+    "privacy_policy": "https://www.alphaxiv.org/privacy",
+    "terms_of_service": "https://www.alphaxiv.org/terms",
+    "is_discoverable_app": true
+  },
+  "policy_info": {
+    "safety_status": "SCANNED_OK"
+  },
+  "keywords_for_discovery": null,
+  "developer_type": "TRUSTED_PARTNER",
+  "distribution_channel": "ECOSYSTEM_DIRECTORY",
+  "sync_metadata": {
+    "syncable": false,
+    "user_allowed_to_sync": false,
+    "sync_only": false,
+    "supports_admin_sync": false,
+    "sync_status": null
+  },
+  "actions_changed_since_review": false,
+  "apps_privacy_control": null,
+  "action_param_schemas": null,
+  "disable_in_temporary_chat": false,
+  "enable_multi_links": true,
+  "app_metadata": {
+    "review": {
+      "status": "RELEASED"
+    },
+    "categories": null,
+    "subtitle": null,
+    "screenshots": null,
+    "developer": null,
+    "version": "1.0.0",
+    "version_id": "asdk_app_v_6a69834bf700819199fd31f9e7377a1a",
+    "customer_support": null,
+    "mcp_server_instructions": "alphaXiv provides access to a database of over 2.5 million academic research papers from arXiv. (computer science, mathematics, physics, statistics, quantitative biology/finance, electrical engineering, NOT biomedical, clinical, or life science papers from PubMed, Cell, Nature) These tools are useful when the user asks about, references, or discusses academic papers, scientific research, scholarly literature, citations, research topics, or anything related to academic work. If the user mentions a research area, methodology, scientific concept, asks for literature reviews, wants to find related work, or asks questions that could benefit from academic sources, consider using the search tools. When the user references a specific paper or asks about its content, the paper content and PDF query tools can help. Prefer searching for and citing real papers over relying on memory alone for research questions. The library tools manage the user's own folders of bookmarked papers: a paper can live in several folders at once, and 'to read', 'reading', and 'completed' are just the default folders rather than exclusive states. The notes tools read the user's own private notes and highlights on papers. The researcher tools answer questions about people: who works on a subject, an organization's roster, where someone is now, who they publish with, and the user's own follows. Results address papers as [ID=<id>] and researchers as [SLUG=<slug>]; pass those values back to the tools that take a paper id or a researcher slug, and render them as https://www.alphaxiv.org/abs/<id> and https://www.alphaxiv.org/@<slug> rather than showing the bracketed handle to the user."
+  },
+  "available_controls": null,
+  "logo_url": "https://files.openai.com/content?id=file_example",
+  "logo_url_dark": "https://files.openai.com/content?id=file_example",
+  "icon_assets": {
+    "256_square": "https://files.openai.com/content?id=file_example",
+    "256_circle": "https://files.openai.com/content?id=file_example"
+  },
+  "icon_dark_assets": {
+    "256_square": "https://files.openai.com/content?id=file_example",
+    "256_circle": "https://files.openai.com/content?id=file_example"
+  },
+  "actions": []
+}

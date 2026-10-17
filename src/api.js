@@ -14,6 +14,11 @@ export const CONNECTOR_PATH = "/backend-api/aip/connectors";
 const CONFIG_DIR = join(homedir(), ".config", "chatgpt-plugins");
 const DEVICE_ID_FILE = join(CONFIG_DIR, "device-id");
 
+// Cloudflare 403s non-browser user-agents on the backend-api paths, so default
+// to a realistic one (override with CGP_USER_AGENT).
+export const DEFAULT_USER_AGENT =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36";
+
 let transport = globalThis.fetch;
 
 // Tests inject a transport so no sockets are opened. Contract: (url, init) =>
@@ -42,9 +47,9 @@ export function resolveDeviceId(explicit) {
   return id;
 }
 
-export function buildHeaders({ deviceId, language = "en-US", credentials = {} } = {}) {
+export function buildHeaders({ deviceId, language = "en-US", credentials = {}, userAgent } = {}) {
   const headers = {
-    "user-agent": `chatgpt-plugins-cli/0.2 (+node ${process.version})`,
+    "user-agent": userAgent ?? process.env.CGP_USER_AGENT ?? DEFAULT_USER_AGENT,
     "oai-device-id": resolveDeviceId(deviceId),
     "oai-language": language,
     accept: "*/*",

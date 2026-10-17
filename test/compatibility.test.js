@@ -20,6 +20,8 @@ const mcp = normalizeConnector(load("connector-mcp-oauth.json"));
 const rest = normalizeConnector(load("connector-rest-apikey.json"));
 const malformed = normalizeConnector(load("connector-malformed.json"));
 const local = normalizeConnector(load("connector-local-executor.json"));
+// The real connector schema, captured from the live endpoint (sanitized).
+const live = normalizeConnector(load("connector-alphaxiv-mcp.json"));
 
 test("normalizeConnector extracts core fields", () => {
   assert.equal(mcp.service, "alphaxiv");
@@ -49,6 +51,46 @@ test("OAuth metadata is parsed including PKCE and registration", () => {
 test("classifies MCP vs REST/OpenAPI", () => {
   assert.equal(classifyConnector(mcp, null).type, CLASSIFICATION.MCP);
   assert.equal(classifyConnector(rest, null).type, CLASSIFICATION.REST_OPENAPI);
+});
+
+// --- real live schema (connector_type / base_url / supported_auth[]) ---------
+
+test("real schema: connector_type and base_url drive the MCP endpoint", () => {
+  assert.equal(live.connectorType, "mcp");
+  assert.equal(live.connectorTypeRaw, "MCP");
+  assert.equal(live.baseUrl, "https://api.alphaxiv.org/mcp/v1");
+  assert.equal(live.mcp.isMcp, true);
+  assert.equal(live.mcp.endpoint, "https://api.alphaxiv.org/mcp/v1");
+  assert.equal(classifyConnector(live, null).type, CLASSIFICATION.MCP);
+});
+
+test("real schema: OAuth is read from supported_auth[].{...}", () => {
+  assert.equal(live.oauth.isOauth, true);
+  assert.equal(live.oauth.authorizationUrl, "https://api.alphaxiv.org/auth/oauth2/authorize");
+  assert.equal(live.oauth.tokenUrl, "https://api.alphaxiv.org/auth/oauth2/token");
+  assert.equal(live.oauth.registrationUrl, "https://api.alphaxiv.org/auth/oauth2/register");
+  assert.equal(live.oauth.revocationUrl, "https://api.alphaxiv.org/auth/oauth2/revoke");
+  assert.equal(live.oauth.issuerUrl, "https://api.alphaxiv.org/auth/.well-known/openid-configuration");
+  assert.deepEqual(live.oauth.supportedAuth, ["oauth"]);
+  assert.equal(live.oauth.oauthResource, "https://api.alphaxiv.org/mcp/v1");
+});
+
+test("real schema: PKCE methods and scopes", () => {
+  assert.equal(live.oauth.pkce, true);
+  assert.equal(live.oauth.pkceRequired, true);
+  assert.equal(live.oauth.pkceMethod, "S256");
+  assert.deepEqual(live.oauth.pkceMethods, ["S256"]);
+  assert.deepEqual(live.oauth.scopes, ["email", "profile"]);
+  assert.deepEqual(live.oauth.clientAuthMethods, ["none", "client_secret_basic", "client_secret_post"]);
+  assert.equal(live.oauth.oidcEnabled, true);
+});
+
+test("real schema: MCP + OAuth registration is a candidate", () => {
+  const report = independentConnectionReport(live, null, { connectorSource: "live" });
+  assert.equal(report.assessment.independentClient.state, "candidate");
+  assert.equal(report.registration.advertised, true);
+  assert.equal(report.registration.registrationUrl, "https://api.alphaxiv.org/auth/oauth2/register");
+  assert.equal(report.liveConnectionTested, false);
 });
 
 test("MCP + OAuth with registration is a candidate for independent connection", () => {
